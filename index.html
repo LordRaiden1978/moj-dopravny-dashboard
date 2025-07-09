@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard: Riadiaca veža inteligentnej dopravy v Bratislave</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chosen Palette: "Mestská Modrá" (Urban Blue) - kombinácia neutrálnych sivých tónov s akcentmi modrej a zelenej pre jasnosť a pokoj. -->
+    <!-- Application Structure Plan: Aplikácia je navrhnutá ako single-page dashboard s vertikálnou navigáciou na ľavej strane. Tento prístup umožňuje používateľom rýchlo prepínať medzi kľúčovými sekciami projektu: Prehľad, Stav Nasadenia, Kvalita Dát, Dopravné Analýzy a Projektový Manažment. Každá sekcia je samostatným modulom, ktorý sa zobrazí po kliknutí, čo udržuje rozhranie čisté a zamerané na konkrétnu úlohu. Táto štruktúra bola zvolená pre svoju prehľadnosť a schopnosť prezentovať komplexné dáta v logických, ľahko stráviteľných celkoch. -->
+    <!-- Visualization & Content Choices: Mapa (HTML/CSS) pre vizuálnu reprezentáciu lokalít. KPI karty (HTML/Tailwind) pre rýchle zobrazenie kľúčových metrík. Grafy (Chart.js) pre vizualizáciu trendov a distribúcií - koláčový (stav), spojnicový (časové rady), stĺpcový (porovnania) a radarový (komplexné porovnanie). Interaktivita je zabezpečená JS, ktorý umožňuje prepínanie medzi variantmi analýz (Základný, Rozšírený, Komplexný), čo priamo odráža štruktúru požiadaviek. Všetky dáta sú generované ako mock dáta v JS pre demonštráciu funkčnosti. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        .main-content {
+            transition: opacity 0.3s ease-in-out;
+        }
+        .section {
+            display: none;
+        }
+        .section.active {
+            display: block;
+        }
+        .kpi-card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .kpi-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div class="flex h-screen">
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 bg-white shadow-lg flex flex-col">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h1 class="text-xl font-bold text-gray-800 flex items-center">
+                    <i class="fas fa-car-side mr-3 text-blue-600"></i>
+                    Dopravný Dashboard
+                </h1>
+                <p class="text-xs text-gray-500 mt-1">Riadiaca veža projektu</p>
+            </div>
+            <nav class="flex-1 px-4 py-4 space-y-2">
+                <a href="#overview" class="nav-item flex items-center px-4 py-2 text-gray-700 rounded-lg hover:bg-gray-100 hover:text-blue-600 transition-colors duration-200">
+                    <i class="fas fa-tachometer-alt w-6 text-center"></i><span class="ml-3">Prehľad</span>
+                </a>
+                <a href="#deployment" class="nav-item flex items-center px-4 py-2 text-gray-700 rounded-lg hover:bg-gray-100 hover:text-blue-600 transition-colors duration-200">
+                    <i class="fas fa-map-marked-alt w-6 text-center"></i><span class="ml-3">Stav Nasadenia</span>
+                </a>
+                <a href="#data-quality" class="nav-item flex items-center px-4 py-2 text-gray-700 rounded-lg hover:bg-gray-100 hover:text-blue-600 transition-colors duration-200">
+                    <i class="fas fa-database w-6 text-center"></i><span class="ml-3">Kvalita Dát</span>
+                </a>
+                <a href="#analysis" class="nav-item flex items-center px-4 py-2 text-gray-700 rounded-lg hover:bg-gray-100 hover:text-blue-600 transition-colors duration-200">
+                    <i class="fas fa-chart-line w-6 text-center"></i><span class="ml-3">Dopravné Analýzy</span>
+                </a>
+                <a href="#project-management" class="nav-item flex items-center px-4 py-2 text-gray-700 rounded-lg hover:bg-gray-100 hover:text-blue-600 transition-colors duration-200">
+                    <i class="fas fa-tasks w-6 text-center"></i><span class="ml-3">Projektový Manažment</span>
+                </a>
+            </nav>
+            <div class="px-6 py-4 border-t border-gray-200 text-center">
+                <p class="text-xs text-gray-400">&copy; 2025 Hlavné mesto SR Bratislava</p>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-6 lg:p-8 overflow-y-auto">
+            <!-- Overview Section -->
+            <section id="overview-section" class="section">
+                <h2 class="text-3xl font-bold mb-6 text-gray-800">Celkový Prehľad Projektu</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <!-- KPI Cards -->
+                    <div class="kpi-card">
+                        <h3 class="text-gray-500 font-medium">Stav Nasadenia</h3>
+                        <p id="overview-deployment-status" class="text-3xl font-bold mt-2 text-blue-600">66%</p>
+                        <p class="text-sm text-gray-400 mt-1">4 z 6 lokalít online</p>
+                    </div>
+                    <div class="kpi-card">
+                        <h3 class="text-gray-500 font-medium">Presnosť Klasifikácie</h3>
+                        <p id="overview-accuracy" class="text-3xl font-bold mt-2 text-green-600">96.5%</p>
+                        <p class="text-sm text-gray-400 mt-1">Priemer za posledných 7 dní</p>
+                    </div>
+                    <div class="kpi-card">
+                        <h3 class="text-gray-500 font-medium">Aktuálne Kongescie</h3>
+                        <p id="overview-congestion" class="text-3xl font-bold mt-2 text-orange-500">2</p>
+                        <p class="text-sm text-gray-400 mt-1">Aktívne dopravné zápchy</p>
+                    </div>
+                    <div class="kpi-card">
+                        <h3 class="text-gray-500 font-medium">Čerpanie Rozpočtu</h3>
+                        <p id="overview-budget" class="text-3xl font-bold mt-2 text-red-500">75%</p>
+                        <p class="text-sm text-gray-400 mt-1">Projekt vo fáze realizácie</p>
+                    </div>
+                </div>
+                <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="font-semibold text-lg mb-4 text-gray-700">Dopravná záťaž za posledných 24 hodín</h3>
+                        <div class="chart-container"><canvas id="trafficLoadChart"></canvas></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="font-semibold text-lg mb-4 text-gray-700">Prehľad detekovaných priestupkov (Tento týždeň)</h3>
+                        <div class="chart-container"><canvas id="violationsOverviewChart"></canvas></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Deployment Section -->
+            <section id="deployment-section" class="section">
+                <h2 class="text-3xl font-bold mb-6 text-gray-800">Stav Nasadenia Systému</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="font-semibold text-lg mb-4 text-gray-700">Mapa lokalít</h3>
+                        <div class="relative bg-gray-100 h-96 rounded-lg overflow-hidden" id="map-container">
+                             <!-- This is a schematic representation, not a real map -->
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md flex flex-col justify-center">
+                        <h3 class="font-semibold text-lg mb-4 text-gray-700">Progres Inštalácie</h3>
+                        <div class="chart-container" style="height: 250px;"><canvas id="installationProgressChart"></canvas></div>
+                        <div class="mt-4 text-center">
+                            <p class="text-4xl font-bold text-blue-600">4<span class="text-2xl text-gray-500">/6</span></p>
+                            <p class="text-gray-600">Lokalít plne funkčných</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Data Quality Section -->
+            <section id="data-quality-section" class="section">
+                 <h2 class="text-3xl font-bold mb-6 text-gray-800">Kvalita a Dostupnosť Dát</h2>
+                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     <div class="kpi-card">
+                         <h3 class="text-gray-500 font-medium">Priemerná Dostupnosť</h3>
+                         <p class="text-3xl font-bold mt-2 text-green-600">99.8%</p>
+                         <p class="text-sm text-gray-400 mt-1">Za posledných 30 dní</p>
+                     </div>
+                     <div class="kpi-card">
+                         <h3 class="text-gray-500 font-medium">Priemerná Presnosť Klasifikácie</h3>
+                         <p class="text-3xl font-bold mt-2 text-green-600">96.5%</p>
+                         <p class="text-sm text-gray-400 mt-1">Cieľ > 95%</p>
+                     </div>
+                     <div class="kpi-card">
+                         <h3 class="text-gray-500 font-medium">Celkový Objem Dát</h3>
+                         <p class="text-3xl font-bold mt-2 text-blue-600">1.2 TB</p>
+                         <p class="text-sm text-gray-400 mt-1">Tento mesiac</p>
+                     </div>
+                 </div>
+                 <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="font-semibold text-lg mb-4 text-gray-700">Dostupnosť Dát po Lokalite (Posledných 7 dní)</h3>
+                        <div class="chart-container"><canvas id="availabilityChart"></canvas></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="font-semibold text-lg mb-4 text-gray-700">Denný Objem Zozbieraných Dát</h3>
+                        <div class="chart-container"><canvas id="dataVolumeChart"></canvas></div>
+                    </div>
+                 </div>
+            </section>
+
+            <!-- Analysis Section -->
+            <section id="analysis-section" class="section">
+                <h2 class="text-3xl font-bold mb-6 text-gray-800">Dopravno-inžinierske Analýzy</h2>
+                <div class="mb-6 flex space-x-1 bg-gray-200 p-1 rounded-lg">
+                    <button class="analysis-tab-btn flex-1 py-2 px-4 rounded-md text-sm font-medium bg-white shadow" data-variant="1">Základný prieskum</button>
+                    <button class="analysis-tab-btn flex-1 py-2 px-4 rounded-md text-sm font-medium" data-variant="2">Riadenie SS</button>
+                    <button class="analysis-tab-btn flex-1 py-2 px-4 rounded-md text-sm font-medium" data-variant="3">Priestupky</button>
+                </div>
+                <div id="analysis-content">
+                    <!-- Content will be injected by JS -->
+                </div>
+            </section>
+
+            <!-- Project Management Section -->
+            <section id="project-management-section" class="section">
+                <h2 class="text-3xl font-bold mb-6 text-gray-800">Projektový Manažment</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="font-semibold text-lg mb-4 text-gray-700">Čerpanie Rozpočtu (v EUR)</h3>
+                        <div class="chart-container"><canvas id="budgetChart"></canvas></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="font-semibold text-lg mb-4 text-gray-700">Stav Míľnikov Projektu</h3>
+                        <div id="milestones-container" class="space-y-4">
+                            <!-- Milestones will be injected by JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- MOCK DATA ---
+    const mockData = {
+        locations: [
+            { id: 1, name: 'Račianske mýto', status: 'ok', pos: { top: '30%', left: '50%' } },
+            { id: 2, name: 'Trnavská – Jégého', status: 'ok', pos: { top: '50%', left: '65%' } },
+            { id: 3, name: 'Trnavská – Bajkalská', status: 'ok', pos: { top: '45%', left: '80%' } },
+            { id: 4, name: 'Bajkalská – Drieňová', status: 'ok', pos: { top: '65%', left: '75%' } },
+            { id: 5, name: 'Trnavská – Tomášikova', status: 'maintenance', pos: { top: '35%', left: '90%' } },
+            { id: 6, name: 'Mierová / Gagarinova', status: 'planned', pos: { top: '80%', left: '85%' } }
+        ],
+        overview: {
+            deploymentStatus: '80%',
+            accuracy: '96.5%',
+            congestion: 2,
+            budget: '75%'
+        },
+        trafficLoad: {
+            labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
+            data: [120, 150, 200, 450, 800, 1100, 1500, 1800, 1600, 1200, 1000, 900, 1100, 1200, 1400, 1900, 2100, 1800, 1500, 1100, 700, 400, 250, 150]
+        },
+        violations: {
+            labels: ['Jazda na červenú', 'Státie v zákaze', 'Jazda v protismere', 'Nedovolené predbiehanie'],
+            data: [45, 25, 15, 5]
+        },
+        installationProgress: {
+            labels: ['Dokončené', 'Prebieha', 'Plánované'],
+            data: [4, 1, 1]
+        },
+        dataQuality: {
+            availability: {
+                labels: ['Deň -6', 'Deň -5', 'Deň -4', 'Deň -3', 'Deň -2', 'Včera', 'Dnes'],
+                datasets: [
+                    { label: 'Račianske mýto', data: [99.8, 99.9, 100, 99.7, 99.9, 100, 99.8], borderColor: '#3b82f6', tension: 0.1 },
+                    { label: 'Trnavská–Jégého', data: [100, 100, 99.5, 99.6, 99.8, 99.9, 100], borderColor: '#10b981', tension: 0.1 },
+                ]
+            },
+            volume: {
+                labels: ['Pondelok', 'Utorok', 'Streda', 'Štvrtok', 'Piatok', 'Sobota', 'Nedeľa'],
+                data: [180, 210, 220, 230, 250, 150, 120]
+            }
+        },
+        analysis: {
+            variant1: {
+                trafficDensity: { labels: ['08:00', '12:00', '17:00'], data: [85, 55, 92] },
+                avgSpeed: { labels: ['Račianske mýto', 'Trnavská', 'Bajkalská'], data: [25, 35, 31] },
+                vehicleCounts: {
+                    labels: ['Pondelok', 'Utorok', 'Streda', 'Štvrtok', 'Piatok'],
+                    datasets: [
+                        { label: 'Osobné autá', data: [12000, 13500, 14000, 13800, 15000], backgroundColor: '#3b82f6' },
+                        { label: 'Nákladné autá', data: [1500, 1600, 1750, 1650, 1800], backgroundColor: '#60a5fa' },
+                        { label: 'Autobusy', data: [800, 850, 870, 860, 900], backgroundColor: '#93c5fd' }
+                    ]
+                },
+                directionalSurvey: [
+                    { from: 'Západ', to: 'Východ', count: 1250 },
+                    { from: 'Západ', to: 'Sever', count: 800 },
+                    { from: 'Juh', to: 'Východ', count: 950 }
+                ]
+            },
+            variant2: {
+                laneOccupancy: { labels: ['16:00', '16:15', '16:30', '16:45', '17:00'], data: [60, 75, 88, 92, 85] },
+                travelTime: { labels: ['Ranná špička', 'Obed', 'Popoludňajšia špička'], data: [15, 8, 18] },
+                activeCongestions: [
+                    { location: 'Trnavské mýto', duration: '25 min', length: '1.2 km' },
+                    { location: 'Most Apollo', duration: '18 min', length: '0.8 km' },
+                ]
+            },
+            variant3: {
+                violationsDistribution: { labels: ['Jazda na červenú', 'Státie v zákaze', 'Jazda v protismere'], data: [120, 75, 40] },
+                ecvDetections: { labels: Array.from({length: 7}, (_, i) => `Deň -${6-i}`), data: [85000, 87000, 91000, 92000, 95000, 75000, 68000] }
+            }
+        },
+        projectManagement: {
+            budget: {
+                planned: [10, 25, 45, 65, 80, 90, 100],
+                actual: [8, 22, 40, 60, 75, null, null]
+            },
+            milestones: [
+                { name: 'Príprava lokalít', status: 'completed', date: 'Q1 2025' },
+                { name: 'Inštalácia hardvéru', status: 'in-progress', date: 'Q2 2025' },
+                { name: 'Konfigurácia softvéru', status: 'in-progress', date: 'Q3 2025' },
+                { name: 'Integračné testovanie', status: 'planned', date: 'Q4 2025' },
+                { name: 'Finálne odovzdanie', status: 'planned', date: 'Q1 2026' }
+            ]
+        }
+    };
+
+    // --- CHART CONFIGS ---
+    const chartConfigs = {
+        trafficLoad: {
+            type: 'line',
+            data: {
+                labels: mockData.trafficLoad.labels,
+                datasets: [{
+                    label: 'Počet vozidiel za hodinu',
+                    data: mockData.trafficLoad.data,
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    tension: 0.4
+                }]
+            },
+            options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        },
+        violationsOverview: {
+            type: 'bar',
+            data: {
+                labels: mockData.violations.labels,
+                datasets: [{
+                    label: 'Počet priestupkov',
+                    data: mockData.violations.data,
+                    backgroundColor: ['#ef4444', '#f97316', '#eab308', '#84cc16'],
+                }]
+            },
+            options: { maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+        },
+        installationProgress: {
+            type: 'doughnut',
+            data: {
+                labels: mockData.installationProgress.labels,
+                datasets: [{
+                    data: mockData.installationProgress.data,
+                    backgroundColor: ['#10b981', '#f59e0b', '#d1d5db'],
+                    borderColor: '#ffffff',
+                    borderWidth: 4
+                }]
+            },
+            options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+        },
+        availability: {
+            type: 'line',
+            data: mockData.dataQuality.availability,
+            options: { maintainAspectRatio: false, scales: { y: { beginAtZero: false, min: 98, max: 100 } } }
+        },
+        dataVolume: {
+            type: 'bar',
+            data: {
+                labels: mockData.dataQuality.volume.labels,
+                datasets: [{
+                    label: 'Objem dát (GB)',
+                    data: mockData.dataQuality.volume.data,
+                    backgroundColor: '#60a5fa'
+                }]
+            },
+            options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        },
+        budget: {
+            type: 'line',
+            data: {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'Máj', 'Jún', 'Júl'],
+                datasets: [
+                    { label: 'Plánované čerpanie', data: mockData.projectManagement.budget.planned, borderColor: '#a5b4fc', tension: 0.1, fill: false },
+                    { label: 'Reálne čerpanie', data: mockData.projectManagement.budget.actual, backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: '#3b82f6', tension: 0.4, fill: true }
+                ]
+            },
+            options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } } }
+        }
+    };
+    
+    // --- DYNAMIC CONTENT ---
+    const analysisTemplates = {
+        1: `
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="kpi-card text-center">
+                    <h3 class="text-gray-500 font-medium">Priemerná Rýchlosť (Špička)</h3>
+                    <p class="text-4xl font-bold mt-2 text-blue-600">30<span class="text-xl"> km/h</span></p>
+                </div>
+                <div class="kpi-card text-center">
+                    <h3 class="text-gray-500 font-medium">Priemerná Hustota</h3>
+                    <p class="text-4xl font-bold mt-2 text-orange-500">77<span class="text-xl"> voz./km</span></p>
+                </div>
+                <div class="kpi-card text-center">
+                    <h3 class="text-gray-500 font-medium">Počet Vozidiel (dnes)</h3>
+                    <p class="text-4xl font-bold mt-2 text-green-600">145,289</p>
+                </div>
+            </div>
+            <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="font-semibold text-lg mb-4 text-gray-700">Počty vozidiel podľa typu (Tento týždeň)</h3>
+                    <div class="chart-container"><canvas id="vehicleCountsChart"></canvas></div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="font-semibold text-lg mb-4 text-gray-700">Hlavné dopravné smery (Račianske mýto)</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left text-gray-500">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                <tr><th scope="col" class="px-6 py-3">Z</th><th scope="col" class="px-6 py-3">Do</th><th scope="col" class="px-6 py-3">Počet vozidiel</th></tr>
+                            </thead>
+                            <tbody>
+                                ${mockData.analysis.variant1.directionalSurvey.map(r => `<tr class="bg-white border-b"><td class="px-6 py-4">${r.from}</td><td class="px-6 py-4">${r.to}</td><td class="px-6 py-4 font-medium">${r.count.toLocaleString('sk-SK')}</td></tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `,
+        2: `
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="kpi-card text-center">
+                    <h3 class="text-gray-500 font-medium">Priem. Obsadenosť Pruhov (Špička)</h3>
+                    <p class="text-4xl font-bold mt-2 text-red-500">89%</p>
+                </div>
+                <div class="kpi-card text-center">
+                    <h3 class="text-gray-500 font-medium">Priemerné Zdržanie</h3>
+                    <p class="text-4xl font-bold mt-2 text-orange-500">12<span class="text-xl"> min</span></p>
+                </div>
+                <div class="kpi-card text-center">
+                    <h3 class="text-gray-500 font-medium">Aktuálne Kongescie</h3>
+                    <p class="text-4xl font-bold mt-2 text-red-600">${mockData.analysis.variant2.activeCongestions.length}</p>
+                </div>
+            </div>
+            <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="font-semibold text-lg mb-4 text-gray-700">Obsadenosť pruhov (Trnavská, 16:00-17:00)</h3>
+                    <div class="chart-container"><canvas id="laneOccupancyChart"></canvas></div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="font-semibold text-lg mb-4 text-gray-700">Aktívne kongescie</h3>
+                    <ul class="space-y-3">
+                         ${mockData.analysis.variant2.activeCongestions.map(c => `<li class="p-3 bg-red-50 rounded-lg flex items-center"><i class="fas fa-exclamation-triangle text-red-500 mr-3"></i><div><p class="font-semibold text-gray-800">${c.location}</p><p class="text-sm text-gray-600">Trvanie: ${c.duration}, Dĺžka: ${c.length}</p></div></li>`).join('')}
+                    </ul>
+                </div>
+            </div>
+        `,
+        3: `
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="kpi-card text-center">
+                    <h3 class="text-gray-500 font-medium">Celkový počet priestupkov (mesiac)</h3>
+                    <p class="text-4xl font-bold mt-2 text-red-600">842</p>
+                </div>
+                <div class="kpi-card text-center">
+                    <h3 class="text-gray-500 font-medium">Úspešnosť identifikácie EČV</h3>
+                    <p class="text-4xl font-bold mt-2 text-green-600">98.2%</p>
+                </div>
+                <div class="kpi-card text-center">
+                    <h3 class="text-gray-500 font-medium">Najčastejší priestupok</h3>
+                    <p class="text-2xl font-bold mt-4 text-gray-700">Jazda na červenú</p>
+                </div>
+            </div>
+            <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="font-semibold text-lg mb-4 text-gray-700">Rozdelenie priestupkov</h3>
+                    <div class="chart-container"><canvas id="violationsDistributionChart"></canvas></div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="font-semibold text-lg mb-4 text-gray-700">Počet detekcií EČV (Posledných 7 dní)</h3>
+                    <div class="chart-container"><canvas id="ecvDetectionsChart"></canvas></div>
+                </div>
+            </div>
+        `
+    };
+
+    const analysisCharts = {
+        1: () => {
+            new Chart(document.getElementById('vehicleCountsChart'), {
+                type: 'bar',
+                data: mockData.analysis.variant1.vehicleCounts,
+                options: { maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
+            });
+        },
+        2: () => {
+            new Chart(document.getElementById('laneOccupancyChart'), {
+                type: 'line',
+                data: {
+                    labels: mockData.analysis.variant2.laneOccupancy.labels,
+                    datasets: [{ label: 'Obsadenosť (%)', data: mockData.analysis.variant2.laneOccupancy.data, borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.2)', fill: true, tension: 0.1 }]
+                },
+                options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } } }
+            });
+        },
+        3: () => {
+            new Chart(document.getElementById('violationsDistributionChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: mockData.analysis.variant3.violationsDistribution.labels,
+                    datasets: [{
+                        data: mockData.analysis.variant3.violationsDistribution.data,
+                        backgroundColor: ['#ef4444', '#f97316', '#eab308'],
+                        borderColor: '#ffffff',
+                        borderWidth: 4
+                    }]
+                },
+                options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+            new Chart(document.getElementById('ecvDetectionsChart'), {
+                type: 'line',
+                data: {
+                    labels: mockData.analysis.variant3.ecvDetections.labels,
+                    datasets: [{
+                        label: 'Detekcie EČV',
+                        data: mockData.analysis.variant3.ecvDetections.data,
+                        borderColor: '#8b5cf6',
+                        tension: 0.3,
+                        fill: false
+                    }]
+                },
+                options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+            });
+        }
+    };
+    
+    // --- UI LOGIC ---
+    const navItems = document.querySelectorAll('.nav-item');
+    const sections = document.querySelectorAll('.section');
+    const analysisTabs = document.querySelectorAll('.analysis-tab-btn');
+    const analysisContent = document.getElementById('analysis-content');
+
+    function navigateTo(hash) {
+        if (!hash) hash = '#overview';
+        
+        sections.forEach(s => s.classList.remove('active'));
+        navItems.forEach(n => n.classList.remove('bg-blue-100', 'text-blue-700', 'font-semibold'));
+
+        const targetSection = document.getElementById(hash.substring(1) + '-section');
+        const targetNavItem = document.querySelector(`.nav-item[href="${hash}"]`);
+        
+        if (targetSection) {
+            targetSection.classList.add('active');
+        }
+        if (targetNavItem) {
+            targetNavItem.classList.add('bg-blue-100', 'text-blue-700', 'font-semibold');
+        }
+    }
+
+    function switchAnalysisTab(variant) {
+        analysisTabs.forEach(tab => {
+            if(tab.dataset.variant === variant) {
+                tab.classList.add('bg-white', 'shadow');
+            } else {
+                tab.classList.remove('bg-white', 'shadow');
+            }
+        });
+        analysisContent.innerHTML = analysisTemplates[variant];
+        // Render charts for the active tab
+        if (analysisCharts[variant]) {
+            setTimeout(() => analysisCharts[variant](), 50); // Delay for canvas to become visible
+        }
+    }
+    
+    navItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const hash = e.currentTarget.getAttribute('href');
+            navigateTo(hash);
+            window.location.hash = hash;
+        });
+    });
+
+    analysisTabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            const variant = e.currentTarget.dataset.variant;
+            switchAnalysisTab(variant);
+        });
+    });
+    
+    function initializeMap() {
+        const mapContainer = document.getElementById('map-container');
+        mockData.locations.forEach(loc => {
+            const dot = document.createElement('div');
+            dot.className = 'absolute w-4 h-4 rounded-full border-2 border-white shadow-lg cursor-pointer transform -translate-x-1/2 -translate-y-1/2';
+            dot.style.top = loc.pos.top;
+            dot.style.left = loc.pos.left;
+            
+            let bgColor = 'bg-gray-400';
+            if (loc.status === 'ok') bgColor = 'bg-green-500';
+            else if (loc.status === 'maintenance') bgColor = 'bg-yellow-500';
+            else if (loc.status === 'planned') bgColor = 'bg-red-500';
+            dot.classList.add(bgColor);
+
+            const tooltip = document.createElement('div');
+            tooltip.className = 'absolute hidden bg-gray-800 text-white text-xs rounded py-1 px-2 z-10 whitespace-nowrap -mt-8';
+            tooltip.innerText = `${loc.name} (${loc.status})`;
+            dot.appendChild(tooltip);
+
+            dot.addEventListener('mouseenter', () => tooltip.classList.remove('hidden'));
+            dot.addEventListener('mouseleave', () => tooltip.classList.add('hidden'));
+
+            mapContainer.appendChild(dot);
+        });
+    }
+
+    function initializeMilestones() {
+        const container = document.getElementById('milestones-container');
+        const statusClasses = {
+            completed: { bg: 'bg-green-100', text: 'text-green-800', icon: 'fa-check-circle' },
+            'in-progress': { bg: 'bg-blue-100', text: 'text-blue-800', icon: 'fa-cogs' },
+            planned: { bg: 'bg-gray-100', text: 'text-gray-800', icon: 'fa-clock' }
+        };
+        mockData.projectManagement.milestones.forEach(m => {
+            const statusInfo = statusClasses[m.status];
+            const milestoneEl = document.createElement('div');
+            milestoneEl.className = `flex items-center p-3 rounded-lg ${statusInfo.bg}`;
+            milestoneEl.innerHTML = `
+                <i class="fas ${statusInfo.icon} ${statusInfo.text} w-5 text-center"></i>
+                <span class="ml-4 font-medium ${statusInfo.text}">${m.name}</span>
+                <span class="ml-auto text-sm ${statusInfo.text}">${m.date}</span>
+            `;
+            container.appendChild(milestoneEl);
+        });
+    }
+    
+    // --- INITIALIZATION ---
+    function init() {
+        // Render static data
+        initializeMap();
+        initializeMilestones();
+
+        // Render charts
+        new Chart(document.getElementById('trafficLoadChart'), chartConfigs.trafficLoad);
+        new Chart(document.getElementById('violationsOverviewChart'), chartConfigs.violationsOverview);
+        new Chart(document.getElementById('installationProgressChart'), chartConfigs.installationProgress);
+        new Chart(document.getElementById('availabilityChart'), chartConfigs.availability);
+        new Chart(document.getElementById('dataVolumeChart'), chartConfigs.dataVolume);
+        new Chart(document.getElementById('budgetChart'), chartConfigs.budget);
+        
+        // Handle initial navigation
+        const initialHash = window.location.hash || '#overview';
+        navigateTo(initialHash);
+
+        // Set initial analysis tab
+        switchAnalysisTab('1');
+    }
+
+    init();
+});
+</script>
+</body>
+</html>
