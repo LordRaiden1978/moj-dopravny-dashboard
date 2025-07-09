@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalkulačka CBA pre IT projekty</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chosen Palette: Mestská Modrá (Urban Blue) - neutrálne sivé tóny s akcentmi modrej a zelenej pre jasnosť a pokoj. Nové farby pre vstupné sekcie: Základné údaje (zelená), Náklady (modrá), Prínosy (oranžová/broskyňová) s žltými hlavičkami. -->
+    <!-- Application Structure Plan: Aplikácia je navrhnutá ako jednostránkový formulár s dynamickým zobrazením výsledkov. Používateľ zadáva vstupné premenné do formulára v hornej časti, ktorý je teraz vizuálne rozdelený do troch stĺpcov s podfarbenými sekciami (Základné údaje, Náklady, Prínosy) podľa požiadaviek. Po kliknutí na tlačidlo "Vypočítať CBA" sa pod formulárom dynamicky zobrazia kľúčové finančné ukazovatele (NPV, IRR, B/C Ratio, Payback Period), detailná tabuľka peňažných tokov a graf kumulatívnych peňažných tokov. Táto štruktúra je zvolená pre jej lineárny a intuitívny tok informácií: Vstup -> Spracovanie -> Výstup, čo minimalizuje potrebu navigácie a zameriava sa na okamžité pochopenie výsledkov analýzy. -->
+    <!-- Visualization & Content Choices: Vstupné polia (HTML input) pre zadávanie dát. KPI karty (HTML/Tailwind) pre prominentné zobrazenie výsledných metrík. Tabuľka (HTML) pre detailný rozpis ročných peňažných tokov a diskontovaných hodnôt. Graf (Chart.js) pre vizualizáciu kumulatívnych peňažných tokov, čo pomáha vizuálne pochopiť návratnosť investície. Interaktivita je zabezpečená JS, ktorý spracováva vstupy, vykonáva finančné výpočty a dynamicky aktualizuje všetky výstupné sekcie. Vstupné sekcie sú teraz podfarbené a rozdelené do stĺpcov pre lepšiu vizuálnu prehľadnosť. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        .kpi-card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .kpi-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 700px; /* Max width for chart container */
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px; /* Base height */
+            max-height: 450px; /* Max height */
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+        .input-group {
+            @apply flex flex-col sm:flex-row sm:items-center mb-4;
+        }
+        .input-group label {
+            @apply w-full sm:w-1/2 text-gray-700 font-medium mb-1 sm:mb-0;
+        }
+        .input-group input {
+            @apply w-full sm:w-1/2 p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500;
+        }
+        .input-section-header {
+            @apply text-xl font-semibold text-gray-800 mb-4 mt-6 border-b pb-2 border-gray-200;
+        }
+        .subsection-header {
+            @apply text-lg font-medium text-gray-700 mb-3 mt-4;
+        }
+        .input-column {
+            @apply bg-white p-6 rounded-lg shadow-xl; /* Main column background */
+        }
+        .header-bg-yellow {
+            @apply bg-yellow-200 p-4 rounded-t-lg -mx-6 -mt-6 mb-6; /* Yellow header for sections */
+        }
+        .basic-data-bg {
+            @apply bg-green-100 p-4 rounded-lg mb-4; /* Light green for basic data */
+        }
+        .costs-bg {
+            @apply bg-blue-100 p-4 rounded-lg mb-4; /* Light blue for costs */
+        }
+        .benefits-bg {
+            @apply bg-orange-100 p-4 rounded-lg mb-4; /* Light orange for benefits */
+        }
+        .input-sum-display {
+            @apply text-right font-semibold text-gray-800 mt-2;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div class="container mx-auto p-6 lg:p-8 max-w-4xl">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-gray-900 mb-2">Kalkulačka CBA pre IT projekty</h1>
+            <p class="text-lg text-gray-600">Nástroj pre analýzu nákladov a prínosov (Cost-Benefit Analysis)</p>
+        </header>
+
+        <section class="bg-white p-8 rounded-lg shadow-xl mb-10">
+            <h2 class="text-2xl font-semibold mb-6 text-gray-800">Vstupné premenné projektu</h2>
+            <form id="cba-form" class="grid grid-cols-1 lg:grid-cols-3 gap-x-8 gap-y-8">
+                <!-- Stĺpec 1: Základné údaje -->
+                <div class="col-span-1 input-column">
+                    <div class="header-bg-yellow">
+                        <h3 class="text-xl font-semibold text-gray-800">Základné údaje</h3>
+                    </div>
+                    <div class="basic-data-bg">
+                        <div class="input-group">
+                            <label for="projectDuration">Dĺžka projektu (roky):</label>
+                            <input type="number" id="projectDuration" value="5" min="1" max="10" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="discountRate">Diskontná sadzba (%):</label>
+                            <input type="number" id="discountRate" value="10" min="0" max="100" step="0.1" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stĺpec 2: Náklady -->
+                <div class="col-span-1 input-column">
+                    <div class="header-bg-yellow">
+                        <h3 class="text-xl font-semibold text-gray-800">Náklady</h3>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="costs-bg">
+                            <p class="subsection-header">Počiatočné náklady (CAPEX - rok 0)</p>
+                            <div class="input-group">
+                                <label for="initialHardware">Hardvér (€):</label>
+                                <input type="number" id="initialHardware" value="50000" min="0" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="initialSoftwareLicenses">Softvérové licencie (počiatočné) (€):</label>
+                                <input type="number" id="initialSoftwareLicenses" value="20000" min="0" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="initialInstallation">Inštalácia / Implementácia (€):</label>
+                                <input type="number" id="initialInstallation" value="25000" min="0" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="initialTraining">Školenie (€):</label>
+                                <input type="number" id="initialTraining" value="5000" min="0" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="initialOtherCosts">Iné počiatočné náklady (€):</label>
+                                <input type="number" id="initialOtherCosts" value="0" min="0" required>
+                            </div>
+                            <div class="input-sum-display">CAPEX celkom: <span id="capex-total">€0.00</span></div>
+                        </div>
+
+                        <div class="costs-bg">
+                            <p class="subsection-header">Ročné prevádzkové náklady (OPEX - od roku 1)</p>
+                            <div class="input-group">
+                                <label for="annualMaintenance">Údržba a podpora (€/rok):</label>
+                                <input type="number" id="annualMaintenance" value="3000" min="0" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="annualSoftwareLicenses">Ročné licencie softvéru (€/rok):</label>
+                                <input type="number" id="annualSoftwareLicenses" value="1000" min="0" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="annualOperationalCosts">Prevádzkové náklady (energie, sieť) (€/rok):</label>
+                                <input type="number" id="annualOperationalCosts" value="1000" min="0" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="annualOtherOperationalCosts">Iné ročné prevádzkové náklady (€/rok):</label>
+                                <input type="number" id="annualOtherOperationalCosts" value="0" min="0" required>
+                            </div>
+                            <div class="input-sum-display">OPEX celkom: <span id="opex-total">€0.00</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stĺpec 3: Prínosy -->
+                <div class="col-span-1 input-column">
+                    <div class="header-bg-yellow">
+                        <h3 class="text-xl font-semibold text-gray-800">Prínosy</h3>
+                    </div>
+                    <div class="benefits-bg">
+                        <p class="subsection-header">Finančné prínosy</p>
+                        <div class="input-group">
+                            <label for="annualEfficiencyGains">Úspora nákladov na prevádzku (€/rok):</label>
+                            <input type="number" id="annualEfficiencyGains" value="15000" min="0" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="annualNewRevenue">Nové príjmy / zlepšenie služem (€/rok):</label>
+                            <input type="number" id="annualNewRevenue" value="5000" min="0" required>
+                        </div>
+                    </div>
+                    <div class="benefits-bg mt-6">
+                        <p class="subsection-header">Nefinančné prínosy (prepočet na finančné)</p>
+                        <div class="input-group">
+                            <label for="annualProductivityIncrease">Zvýšenie efektivity / produktivity (€/rok):</label>
+                            <input type="number" id="annualProductivityIncrease" value="10000" min="0" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="annualOtherBenefits">Iné ročné prínosy (€/rok):</label>
+                            <input type="number" id="annualOtherBenefits" value="0" min="0" required>
+                        </div>
+                    </div>
+                    <div class="input-sum-display mt-6">Prínosy celkom: <span id="benefits-total">€0.00</span></div>
+                </div>
+
+                <button type="submit" class="col-span-full w-full bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700 transition-colors duration-200 text-lg font-semibold mt-6">
+                    Vypočítať CBA <i class="fas fa-calculator ml-2"></i>
+                </button>
+            </form>
+        </section>
+
+        <section id="results-section" class="hidden">
+            <h2 class="text-2xl font-semibold mb-6 text-gray-800">Výsledky CBA</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="kpi-card text-center">
+                    <h3 class="text-gray-500 font-medium">Čistá súčasná hodnota (NPV)</h3>
+                    <p id="npv-result" class="text-3xl font-bold mt-2 text-blue-600">€0.00</p>
+                    <p class="text-sm text-gray-400 mt-1">Ak > 0, projekt je prínosný</p>
+                </div>
+                <div class="kpi-card text-center">
+                    <h3 class="text-gray-500 font-medium">Interná miera výnosnosti (IRR)</h3>
+                    <p id="irr-result" class="text-3xl font-bold mt-2 text-green-600">0.00%</p>
+                    <p class="text-sm text-gray-400 mt-1">Ak > diskontná sadzba, projekt je atraktívny</p>
+                </div>
+                <div class="kpi-card text-center">
+                    <h3 class="text-gray-500 font-medium">Pomer prínosov a nákladov (B/C Ratio)</h3>
+                    <p id="bcr-result" class="text-3xl font-bold mt-2 text-purple-600">0.00</p>
+                    <p class="text-sm text-gray-400 mt-1">Ak > 1, prínosy prevyšujú náklady</p>
+                </div>
+                <div class="kpi-card text-center">
+                    <h3 class="text-gray-500 font-medium">Doba návratnosti</h3>
+                    <p id="payback-result" class="text-3xl font-bold mt-2 text-orange-500">0.00 rokov</p>
+                    <p class="text-sm text-gray-400 mt-1">Čas na pokrytie počiatočnej investície</p>
+                </div>
+            </div>
+
+            <div class="bg-white p-8 rounded-lg shadow-xl mb-8">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800">Detail peňažných tokov</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th rowspan="2" scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rok</th>
+                                <th colspan="2" scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">Náklady (€)</th>
+                                <th colspan="2" scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">Prínosy (€)</th>
+                                <th rowspan="2" scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Čistý peňažný tok (€)</th>
+                                <th rowspan="2" scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Diskontovaný peňažný tok (€)</th>
+                                <th rowspan="2" scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kumulatívny diskontovaný tok (€)</th>
+                            </tr>
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CAPEX</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">OPEX</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Finančné</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nefinančné</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cash-flow-table-body" class="bg-white divide-y divide-gray-200">
+                            <!-- Cash flow rows will be inserted here by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-white p-8 rounded-lg shadow-xl">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800">Kumulatívny diskontovaný peňažný tok</h3>
+                <div class="chart-container"><canvas id="cashFlowChart"></canvas></div>
+            </div>
+        </section>
+
+        <section class="mt-10 p-8 bg-gray-100 rounded-lg shadow-md">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">Vysvetlenie metrík CBA</h2>
+            <div class="space-y-4 text-gray-700">
+                <p>
+                    <span class="font-semibold text-blue-600">Čistá súčasná hodnota (NPV):</span> Meria ziskovosť projektu. Je to rozdiel medzi súčasnou hodnotou peňažných prítokov a súčasnou hodnotou peňažných odtokov. Ak je NPV > 0, projekt je považovaný za ziskový pri danej diskontnej sadzbe.
+                </p>
+                <p>
+                    <span class="font-semibold text-green-600">Interná miera výnosnosti (IRR):</span> Je to diskontná sadzba, pri ktorej je čistá súčasná hodnota (NPV) všetkých peňažných tokov z konkrétneho projektu rovná nule. Ak je IRR vyššia ako požadovaná miera návratnosti (diskontná sadzba), projekt je považovaný za atraktívny.
+                </p>
+                <p>
+                    <span class="font-semibold text-purple-600">Pomer prínosov a nákladov (B/C Ratio):</span> Porovnáva súčasnú hodnotu prínosov so súčasnou hodnotou nákladov. Ak je B/C Ratio > 1, prínosy projektu prevyšujú jeho náklady. Čím vyššie číslo, tým lepší pomer.
+                </p>
+                <p>
+                    <span class="font-semibold text-orange-500">Doba návratnosti:</span> Predstavuje čas, za ktorý sa počiatočná investícia do projektu vráti z kumulatívnych peňažných tokov. Čím kratšia doba návratnosti, tým rýchlejšie sa investícia zhodnotí.
+                </p>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const form = document.getElementById('cba-form');
+        const resultsSection = document.getElementById('results-section');
+        const npvResult = document.getElementById('npv-result');
+        const irrResult = document.getElementById('irr-result');
+        const bcrResult = document.getElementById('bcr-result');
+        const paybackResult = document.getElementById('payback-result');
+        const cashFlowTableBody = document.getElementById('cash-flow-table-body');
+        let cashFlowChartInstance = null;
+
+        // Sum display elements
+        const capexTotalDisplay = document.getElementById('capex-total');
+        const opexTotalDisplay = document.getElementById('opex-total');
+        const benefitsTotalDisplay = document.getElementById('benefits-total');
+
+        // Input elements for sums
+        const initialHardwareInput = document.getElementById('initialHardware');
+        const initialSoftwareLicensesInput = document.getElementById('initialSoftwareLicenses');
+        const initialInstallationInput = document.getElementById('initialInstallation');
+        const initialTrainingInput = document.getElementById('initialTraining');
+        const initialOtherCostsInput = document.getElementById('initialOtherCosts');
+
+        const annualMaintenanceInput = document.getElementById('annualMaintenance');
+        const annualSoftwareLicensesOngoingInput = document.getElementById('annualSoftwareLicenses');
+        const annualOperationalCostsInput = document.getElementById('annualOperationalCosts');
+        const annualOtherOperationalCostsInput = document.getElementById('annualOtherOperationalCosts');
+
+        const annualEfficiencyGainsInput = document.getElementById('annualEfficiencyGains');
+        const annualProductivityIncreaseInput = document.getElementById('annualProductivityIncrease');
+        const annualNewRevenueInput = document.getElementById('annualNewRevenue');
+        const annualOtherBenefitsInput = document.getElementById('annualOtherBenefits');
+
+        // Function to update CAPEX total
+        function updateCapexTotal() {
+            const total = parseFloat(initialHardwareInput.value || 0) +
+                          parseFloat(initialSoftwareLicensesInput.value || 0) +
+                          parseFloat(initialInstallationInput.value || 0) +
+                          parseFloat(initialTrainingInput.value || 0) +
+                          parseFloat(initialOtherCostsInput.value || 0);
+            capexTotalDisplay.textContent = total.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' });
+        }
+
+        // Function to update OPEX total
+        function updateOpexTotal() {
+            const total = parseFloat(annualMaintenanceInput.value || 0) +
+                          parseFloat(annualSoftwareLicensesOngoingInput.value || 0) +
+                          parseFloat(annualOperationalCostsInput.value || 0) +
+                          parseFloat(annualOtherOperationalCostsInput.value || 0);
+            opexTotalDisplay.textContent = total.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' });
+        }
+
+        // Function to update Benefits total
+        function updateBenefitsTotal() {
+            const total = parseFloat(annualEfficiencyGainsInput.value || 0) +
+                          parseFloat(annualProductivityIncreaseInput.value || 0) +
+                          parseFloat(annualNewRevenueInput.value || 0) +
+                          parseFloat(annualOtherBenefitsInput.value || 0);
+            benefitsTotalDisplay.textContent = total.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' });
+        }
+
+        // Attach event listeners to input fields to update sums dynamically
+        [initialHardwareInput, initialSoftwareLicensesInput, initialInstallationInput, initialTrainingInput, initialOtherCostsInput].forEach(input => {
+            input.addEventListener('input', updateCapexTotal);
+        });
+        [annualMaintenanceInput, annualSoftwareLicensesOngoingInput, annualOperationalCostsInput, annualOtherOperationalCostsInput].forEach(input => {
+            input.addEventListener('input', updateOpexTotal);
+        });
+        [annualEfficiencyGainsInput, annualProductivityIncreaseInput, annualNewRevenueInput, annualOtherBenefitsInput].forEach(input => {
+            input.addEventListener('input', updateBenefitsTotal);
+        });
+
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            calculateCBA();
+        });
+
+        function calculateCBA() {
+            const projectDuration = parseInt(document.getElementById('projectDuration').value);
+            const discountRate = parseFloat(document.getElementById('discountRate').value) / 100; // Convert to decimal
+
+            // Počiatočné náklady (CAPEX)
+            const initialHardware = parseFloat(document.getElementById('initialHardware').value);
+            const initialSoftwareLicenses = parseFloat(document.getElementById('initialSoftwareLicenses').value);
+            const initialInstallation = parseFloat(document.getElementById('initialInstallation').value);
+            const initialTraining = parseFloat(document.getElementById('initialTraining').value);
+            const initialOtherCosts = parseFloat(document.getElementById('initialOtherCosts').value);
+            const initialInvestment = initialHardware + initialSoftwareLicenses + initialInstallation + initialTraining + initialOtherCosts;
+
+            // Ročné prínosy
+            const annualEfficiencyGains = parseFloat(document.getElementById('annualEfficiencyGains').value);
+            const annualProductivityIncrease = parseFloat(document.getElementById('annualProductivityIncrease').value);
+            const annualNewRevenue = parseFloat(document.getElementById('annualNewRevenue').value);
+            const annualOtherBenefits = parseFloat(document.getElementById('annualOtherBenefits').value);
+            
+            // Rozdelenie prínosov
+            const annualFinancialBenefits = annualEfficiencyGains + annualNewRevenue;
+            const annualNonFinancialBenefits = annualProductivityIncrease + annualOtherBenefits;
+            const totalAnnualBenefits = annualFinancialBenefits + annualNonFinancialBenefits;
+
+
+            // Ročné prevádzkové náklady (OPEX)
+            const annualMaintenance = parseFloat(document.getElementById('annualMaintenance').value);
+            const annualSoftwareLicensesOngoing = parseFloat(document.getElementById('annualSoftwareLicenses').value);
+            const annualOperationalCosts = parseFloat(document.getElementById('annualOperationalCosts').value);
+            const annualOtherOperationalCosts = parseFloat(document.getElementById('annualOtherOperationalCosts').value);
+            const totalAnnualCosts = annualMaintenance + annualSoftwareLicensesOngoing + annualOperationalCosts + annualOtherOperationalCosts;
+
+
+            if (isNaN(initialInvestment) || isNaN(projectDuration) || isNaN(discountRate) || isNaN(totalAnnualBenefits) || isNaN(totalAnnualCosts) || initialInvestment < 0 || projectDuration < 1 || discountRate < 0 || totalAnnualBenefits < 0 || totalAnnualCosts < 0) {
+                alert('Prosím, zadajte platné kladné číselné hodnoty pre všetky polia.');
+                return;
+            }
+
+            const cashFlows = []; // Net cash flows for IRR calculation
+            let npv = -initialInvestment; // NPV starts with negative initial investment
+            let pvBenefits = 0;
+
+            cashFlows.push(-initialInvestment); // Year 0 initial investment
+
+            // Calculate cash flows for each year
+            for (let i = 1; i <= projectDuration; i++) {
+                const netCashFlow = totalAnnualBenefits - totalAnnualCosts;
+                const discountedCashFlow = netCashFlow / Math.pow((1 + discountRate), i);
+                
+                cashFlows.push(netCashFlow);
+                
+                npv += discountedCashFlow;
+                pvBenefits += totalAnnualBenefits / Math.pow((1 + discountRate), i);
+            }
+
+            // --- NPV ---
+            npvResult.textContent = `${npv.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}`;
+            npvResult.classList.remove('text-blue-600', 'text-red-600');
+            npvResult.classList.add(npv >= 0 ? 'text-blue-600' : 'text-red-600');
+
+            // --- IRR (simplified approximation for client-side) ---
+            // This is a basic iterative method. For production, a more robust library or backend calculation is recommended.
+            let irr = calculateIRR(cashFlows, 0.1); // Start with 10% guess
+            irrResult.textContent = `${(irr * 100).toLocaleString('sk-SK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+            irrResult.classList.remove('text-green-600', 'text-red-600');
+            irrResult.classList.add(irr >= discountRate ? 'text-green-600' : 'text-red-600');
+
+            // --- B/C Ratio ---
+            const pvTotalCosts = initialInvestment + (totalAnnualCosts * (1 - Math.pow(1 + discountRate, -projectDuration)) / discountRate);
+            const bcr = pvBenefits / pvTotalCosts;
+            bcrResult.textContent = `${bcr.toLocaleString('sk-SK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            bcrResult.classList.remove('text-purple-600', 'text-red-600');
+            bcrResult.classList.add(bcr >= 1 ? 'text-purple-600' : 'text-red-600');
+
+            // --- Payback Period ---
+            let cumulativeCashFlowSimple = -initialInvestment; // For simple payback period (undiscounted)
+            let paybackPeriod = 'N/A';
+            for (let i = 0; i < projectDuration; i++) {
+                cumulativeCashFlowSimple += (totalAnnualBenefits - totalAnnualCosts);
+                if (cumulativeCashFlowSimple >= 0) {
+                    paybackPeriod = (i + 1).toFixed(2);
+                    break;
+                }
+            }
+            paybackResult.textContent = `${paybackPeriod} rokov`;
+            paybackResult.classList.remove('text-orange-500', 'text-red-600');
+            paybackResult.classList.add(paybackPeriod !== 'N/A' ? 'text-orange-500' : 'text-red-600');
+
+
+            // --- Populate Cash Flow Table ---
+            cashFlowTableBody.innerHTML = '';
+            let currentCumulativeDiscounted = -initialInvestment;
+            const tableRows = [];
+
+            // Year 0 row (Initial Investment - CAPEX)
+            tableRows.push(`
+                <tr class="bg-white border-b">
+                    <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">0</td>
+                    <td class="px-6 py-4 text-red-600">${initialInvestment.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</td>
+                    <td class="px-6 py-4">0.00</td>
+                    <td class="px-6 py-4">0.00</td>
+                    <td class="px-6 py-4">0.00</td>
+                    <td class="px-6 py-4 font-semibold text-red-600">${(-initialInvestment).toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</td>
+                    <td class="px-6 py-4 font-semibold text-red-600">${(-initialInvestment).toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</td>
+                    <td class="px-6 py-4 font-semibold text-red-600">${(-initialInvestment).toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</td>
+                </tr>
+            `);
+
+            for (let i = 0; i < projectDuration; i++) {
+                const year = i + 1;
+                const netCashFlow = totalAnnualBenefits - totalAnnualCosts;
+                const discountedCashFlow = netCashFlow / Math.pow((1 + discountRate), year);
+                currentCumulativeDiscounted += discountedCashFlow;
+
+                tableRows.push(`
+                    <tr class="bg-white border-b">
+                        <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">${year}</td>
+                        <td class="px-6 py-4">0.00</td> <!-- CAPEX for subsequent years is 0 -->
+                        <td class="px-6 py-4">${totalAnnualCosts.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</td>
+                        <td class="px-6 py-4">${annualFinancialBenefits.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</td>
+                        <td class="px-6 py-4">${annualNonFinancialBenefits.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</td>
+                        <td class="px-6 py-4 ${netCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}">${netCashFlow.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</td>
+                        <td class="px-6 py-4 ${discountedCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}">${discountedCashFlow.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</td>
+                        <td class="px-6 py-4 ${currentCumulativeDiscounted >= 0 ? 'text-blue-600' : 'text-red-600'}">${currentCumulativeDiscounted.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</td>
+                    </tr>
+                `);
+            }
+            cashFlowTableBody.innerHTML = tableRows.join('');
+
+            // --- Update Chart ---
+            const chartLabels = ['Rok 0 (Investícia)'];
+            const chartData = [-initialInvestment];
+            let currentCumulativeChart = -initialInvestment;
+
+            for (let i = 0; i < projectDuration; i++) {
+                const year = i + 1;
+                const netCashFlow = totalAnnualBenefits - totalAnnualCosts;
+                const discountedCashFlow = netCashFlow / Math.pow((1 + discountRate), year);
+                currentCumulativeChart += discountedCashFlow;
+                chartLabels.push(`Rok ${year}`);
+                chartData.push(currentCumulativeChart);
+            }
+
+            if (cashFlowChartInstance) {
+                cashFlowChartInstance.destroy();
+            }
+            const ctx = document.getElementById('cashFlowChart').getContext('2d');
+            cashFlowChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: 'Kumulatívny diskontovaný peňažný tok (€)',
+                        data: chartData,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 5,
+                        pointBackgroundColor: chartData.map(value => value >= 0 ? '#10b981' : '#ef4444')
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Kumulatívny tok (€)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Rok'
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' });
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            resultsSection.classList.remove('hidden');
+        }
+
+        // Helper for IRR calculation (Newton-Raphson method)
+        function calculateIRR(cashFlows, guess) {
+            const MAX_ITERATIONS = 1000;
+            const PRECISION = 0.0001;
+
+            let irr = guess;
+
+            for (let i = 0; i < MAX_ITERATIONS; i++) {
+                let npv = 0;
+                let derivative = 0;
+
+                for (let j = 0; j < cashFlows.length; j++) {
+                    npv += cashFlows[j] / Math.pow(1 + irr, j);
+                    derivative -= cashFlows[j] * j / Math.pow(1 + irr, j + 1);
+                }
+
+                if (Math.abs(npv) < PRECISION) {
+                    return irr;
+                }
+
+                irr = irr - npv / derivative;
+            }
+            return irr; // Return approximation if precision not met
+        }
+
+        // Initial calculation on page load with default values
+        updateCapexTotal();
+        updateOpexTotal();
+        updateBenefitsTotal();
+        calculateCBA();
+    </script>
+</body>
+</html>
