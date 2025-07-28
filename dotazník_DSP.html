@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dopravno-sociologický dotazník</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel CDN (for in-browser JSX transpilation - suitable for development/demos, not production) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        input[type="radio"]:checked + label span:first-child {
+            background-color: #2563eb; /* Blue 600 */
+            border-color: #2563eb;
+        }
+        input[type="checkbox"]:checked + label span:first-child {
+            background-color: #2563eb; /* Blue 600 */
+            border-color: #2563eb;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 sm:p-8 font-inter">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Ensure React and ReactDOM are available globally
+        const { useState } = React;
+        // Import createRoot from react-dom/client for React 18 compatibility
+        const { createRoot } = ReactDOM;
+
+        // Main App component
+        const App = () => {
+            // State for household information (Part A)
+            const [household, setHousehold] = useState({
+                zipCode: '',
+                cityPart: '',
+                adults: '',
+                children: '',
+                cars: '',
+                mhdStop: '',
+            });
+
+            // State for general mobility questions (Part B)
+            const [general, setGeneral] = useState({
+                overallSatisfaction: '',
+                mainProblems: [],
+                willingnessToChange: '',
+            });
+
+            // State for household members and their trips (Part C)
+            const [members, setMembers] = useState([
+                { id: 1, age: '', trips: [{ id: 1, purpose: '', start: '', end: '', time: '', mode: '', mhdLine: '' }] }
+            ]);
+
+            // State for selected modes for Part D (to conditionally show questions)
+            const [selectedModesD, setSelectedModesD] = useState({
+                iad: false,
+                mhd: false,
+                bike: false,
+                walk: false,
+            });
+
+            // State for specific mode questions (Part D)
+            const [specificModes, setSpecificModes] = useState({
+                iad: {
+                    reasonForCar: '',
+                    dailyCarUseFreq: '',
+                    motivationToReduceCar: '',
+                },
+                mhd: {
+                    mhdUseFreq: '',
+                    mhdSatisfaction: '',
+                    motivationToUseMHD: '',
+                },
+                bike: {
+                    bikeOwnershipFreq: '',
+                    bikeInfraSatisfaction: '',
+                    motivationToIncreaseBike: '',
+                },
+                walk: {
+                    walkFreq: '',
+                    walkInfraSatisfaction: '',
+                    walkObstacles: '',
+                },
+            });
+
+            // State for form submission status
+            const [submitted, setSubmitted] = useState(false);
+
+            // Handler for household input changes
+            const handleHouseholdChange = (e) => {
+                const { name, value } = e.target;
+                setHousehold(prev => ({ ...prev, [name]: value }));
+            };
+
+            // Handler for general input changes
+            const handleGeneralChange = (e) => {
+                const { name, value, type, checked } = e.target;
+                if (type === 'checkbox') {
+                    setGeneral(prev => ({
+                        ...prev,
+                        mainProblems: checked
+                            ? [...prev.mainProblems, value]
+                            : prev.mainProblems.filter(problem => problem !== value),
+                    }));
+                } else {
+                    setGeneral(prev => ({ ...prev, [name]: value }));
+                }
+            };
+
+            // Handler for adding a new household member
+            const addMember = () => {
+                setMembers(prev => [...prev, { id: prev.length + 1, age: '', trips: [{ id: 1, purpose: '', start: '', end: '', time: '', mode: '', mhdLine: '' }] }]);
+            };
+
+            // Handler for removing a household member
+            const removeMember = (memberId) => {
+                setMembers(prev => prev.filter(member => member.id !== memberId));
+            };
+
+            // Handler for member's age change
+            const handleMemberAgeChange = (memberId, value) => {
+                setMembers(prev => prev.map(member =>
+                    member.id === memberId ? { ...member, age: value } : member
+                ));
+            };
+
+            // Handler for adding a new trip for a member
+            const addTrip = (memberId) => {
+                setMembers(prev => prev.map(member =>
+                    member.id === memberId
+                        ? { ...member, trips: [...member.trips, { id: member.trips.length + 1, purpose: '', start: '', end: '', time: '', mode: '', mhdLine: '' }] }
+                        : member
+                ));
+            };
+
+            // Handler for removing a trip from a member
+            const removeTrip = (memberId, tripId) => {
+                setMembers(prev => prev.map(member =>
+                    member.id === memberId
+                        ? { ...member, trips: member.trips.filter(trip => trip.id !== tripId) }
+                        : member
+                ));
+            };
+
+            // Handler for trip input changes
+            const handleTripChange = (memberId, tripId, e) => {
+                const { name, value } = e.target;
+                setMembers(prev => prev.map(member =>
+                    member.id === memberId
+                        ? {
+                            ...member,
+                            trips: member.trips.map(trip =>
+                                trip.id === tripId ? { ...trip, [name]: value } : trip
+                            ),
+                        }
+                        : member
+                ));
+            };
+
+            // Handler for specific modes selection (Part D)
+            const handleSelectedModesDChange = (e) => {
+                const { name, checked } = e.target;
+                setSelectedModesD(prev => ({ ...prev, [name]: checked }));
+            };
+
+            // Handler for specific mode questions input changes (Part D)
+            const handleSpecificModesChange = (mode, e) => {
+                const { name, value } = e.target;
+                setSpecificModes(prev => ({
+                    ...prev,
+                    [mode]: {
+                        ...prev[mode],
+                        [name]: value,
+                    },
+                }));
+            };
+
+            // Form submission handler
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                setSubmitted(true);
+                console.log('Household Data:', household);
+                console.log('General Data:', general);
+                console.log('Members and Trips Data:', members);
+                console.log('Specific Modes Data:', specificModes);
+                // Here you would typically send the data to a backend server
+                // For this example, we just log it to the console.
+            };
+
+            if (submitted) {
+                return (
+                    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 font-inter">
+                        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full">
+                            <h2 className="text-3xl font-bold text-green-600 mb-4">Ďakujeme!</h2>
+                            <p className="text-gray-700 text-lg">Váš príspevok je kľúčový pre plánovanie budúcnosti dopravy v Bratislave.</p>
+                            <button
+                                onClick={() => setSubmitted(false)}
+                                className="mt-6 px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-200"
+                            >
+                                Vyplniť znova
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-4xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-lg">
+                    <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-4 text-center">NÁVRH DOPRAVNO-SOCIOLOGICKÉHO DOTAZNÍKA DOMÁCNOSTÍ</h1>
+                    <p className="text-gray-600 mb-6 text-center">
+                        Vážená pani/pán, sme mestská samospráva a v súčasnosti realizujeme dôležitý prieskum mobility a dopravy v Bratislave a jej okolí. Vaše odpovede nám pomôžu lepšie pochopiť dopravné potreby obyvateľov a plánovať budúci rozvoj dopravy tak, aby bola efektívnejšia, ekologickejšia a príjemnejšia pre všetkých.
+                        Prieskum je anonymný a všetky poskytnuté údaje budú spracované v súlade so zákonom o ochrane osobných údajov (GDPR). Vyplnenie dotazníka trvá len niekoľko minút.
+                        Ďakujeme Vám za Váš čas a cenné informácie!
+                    </p>
+
+                    <form onSubmit={handleSubmit} className="space-y-8">
+                        {/* Part A: Household Information */}
+                        <section className="border border-gray-200 p-4 sm:p-6 rounded-md shadow-sm">
+                            <h2 className="text-2xl font-semibold text-gray-700 mb-4">ČASŤ A: Informácie o domácnosti a jej členoch</h2>
+                            <div className="space-y-4">
+                                <div>
+                                    <label htmlFor="zipCode" className="block text-gray-700 font-medium mb-1">PSČ Vašej domácnosti:</label>
+                                    <input
+                                        type="text"
+                                        id="zipCode"
+                                        name="zipCode"
+                                        value={household.zipCode}
+                                        onChange={handleHouseholdChange}
+                                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="cityPart" className="block text-gray-700 font-medium mb-1">Mestská časť, v ktorej bývate (ak je iná ako PSČ):</label>
+                                    <input
+                                        type="text"
+                                        id="cityPart"
+                                        name="cityPart"
+                                        value={household.cityPart}
+                                        onChange={handleHouseholdChange}
+                                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                        required
+                                    />
+                                </div>
+                                <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                                    <div className="flex-1">
+                                        <label htmlFor="adults" className="block text-gray-700 font-medium mb-1">Počet dospelých (18 rokov a viac):</label>
+                                        <input
+                                            type="number"
+                                            id="adults"
+                                            name="adults"
+                                            value={household.adults}
+                                            onChange={handleHouseholdChange}
+                                            min="0"
+                                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label htmlFor="children" className="block text-gray-700 font-medium mb-1">Počet detí (do 17 rokov):</label>
+                                        <input
+                                            type="number"
+                                            id="children"
+                                            name="children"
+                                            value={household.children}
+                                            onChange={handleHouseholdChange}
+                                            min="0"
+                                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <span className="block text-gray-700 font-medium mb-2">Koľko osobných vozidiel má Vaša domácnosť k dispozícii?</span>
+                                    <div className="flex flex-wrap gap-4">
+                                        {['0', '1', '2', '3 a viac'].map(num => (
+                                            <div key={num} className="flex items-center">
+                                                <input
+                                                    type="radio"
+                                                    id={`cars-${num}`}
+                                                    name="cars"
+                                                    value={num}
+                                                    checked={household.cars === num}
+                                                    onChange={handleHouseholdChange}
+                                                    className="hidden"
+                                                    required
+                                                />
+                                                <label htmlFor={`cars-${num}`} className="flex items-center cursor-pointer text-gray-700">
+                                                    <span className="w-4 h-4 inline-block mr-2 rounded-full border border-gray-400"></span>
+                                                    {num}
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <span className="block text-gray-700 font-medium mb-2">Nachádza sa vo vzdialenosti do 500 metrov od Vašej domácnosti zastávka mestskej hromadnej dopravy (autobus, trolejbus, električka)?</span>
+                                    <div className="flex flex-wrap gap-4">
+                                        <div className="flex items-center">
+                                            <input
+                                                type="radio"
+                                                id="mhdStop-yes"
+                                                name="mhdStop"
+                                                value="Áno"
+                                                checked={household.mhdStop === 'Áno'}
+                                                onChange={handleHouseholdChange}
+                                                className="hidden"
+                                                required
+                                            />
+                                            <label htmlFor={`mhdStop-yes`} className="flex items-center cursor-pointer text-gray-700">
+                                                <span className="w-4 h-4 inline-block mr-2 rounded-full border border-gray-400"></span>
+                                                Áno
+                                            </label>
+                                        </div>
+                                        <div className="flex items-center">
+                                            <input
+                                                type="radio"
+                                                id="mhdStop-no"
+                                                name="mhdStop"
+                                                value="Nie"
+                                                checked={household.mhdStop === 'Nie'}
+                                                onChange={handleHouseholdChange}
+                                                className="hidden"
+                                                required
+                                            />
+                                            <label htmlFor={`mhdStop-no`} className="flex items-center cursor-pointer text-gray-700">
+                                                <span className="w-4 h-4 inline-block mr-2 rounded-full border border-gray-400"></span>
+                                                Nie
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Part B: General Mobility Questions */}
+                        <section className="border border-gray-200 p-4 sm:p-6 rounded-md shadow-sm">
+                            <h2 className="text-2xl font-semibold text-gray-700 mb-4">ČASŤ B: Všeobecné otázky o mobilite a životnom štýle (Pre dospelých členov domácnosti)</h2>
+                            <div className="space-y-4">
+                                <div>
+                                    <span className="block text-gray-700 font-medium mb-2">Ako ste celkovo spokojní s aktuálnou dopravnou situáciou v Bratislave a jej regióne?</span>
+                                    <div className="flex flex-wrap gap-4">
+                                        {['Veľmi nespokojný', 'Nespokojný', 'Ani spokojný, ani nespokojný', 'Spokojný', 'Veľmi spokojný'].map(option => (
+                                            <div key={option} className="flex items-center">
+                                                <input
+                                                    type="radio"
+                                                    id={`satisfaction-${option}`}
+                                                    name="overallSatisfaction"
+                                                    value={option}
+                                                    checked={general.overallSatisfaction === option}
+                                                    onChange={handleGeneralChange}
+                                                    className="hidden"
+                                                    required
+                                                />
+                                                <label htmlFor={`satisfaction-${option}`} className="flex items-center cursor-pointer text-gray-700">
+                                                    <span className="w-4 h-4 inline-block mr-2 rounded-full border border-gray-400"></span>
+                                                    {option}
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <span className="block text-gray-700 font-medium mb-2">Ktoré z nasledujúcich oblastí považujete za najväčší problém v doprave a mobilite v Bratislave a regióne? (Možnosť označiť viac odpovedí)</span>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {[
+                                            'Zápchy a preťaženie ciest', 'Nedostatok parkovacích miest', 'Nepravidelnosť a spoľahlivosť MHD',
+                                            'Nedostatočná infraštruktúra pre cyklistov (cyklotrasy, stojany)', 'Zlá kvalita chodníkov a infraštruktúry pre peších',
+                                            'Vysoké náklady na dopravu (palivo, cestovné)', 'Nedostatok informácií o doprave (meškania, výluky)', 'Bezpečnosť na cestách'
+                                        ].map(problem => (
+                                            <div key={problem} className="flex items-center">
+                                                <input
+                                                    type="checkbox"
+                                                    id={`problem-${problem}`}
+                                                    name="mainProblems"
+                                                    value={problem}
+                                                    checked={general.mainProblems.includes(problem)}
+                                                    onChange={handleGeneralChange}
+                                                    className="hidden"
+                                                />
+                                                <label htmlFor={`problem-${problem}`} className="flex items-center cursor-pointer text-gray-700">
+                                                    <span className="w-4 h-4 inline-block mr-2 rounded-md border border-gray-400"></span>
+                                                    {problem}
+                                                </label>
+                                            </div>
+                                        ))}
+                                        <div>
+                                            <label htmlFor="otherProblem" className="block text-gray-700 font-medium mb-1">Iné (prosím uveďte):</label>
+                                            <input
+                                                type="text"
+                                                id="otherProblem"
+                                                name="otherProblem"
+                                                value={general.otherProblem || ''}
+                                                onChange={handleGeneralChange}
+                                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span className="block text-gray-700 font-medium mb-2">Aká je Vaša ochota zmeniť Váš preferovaný spôsob dopravy (napr. z auta na MHD, bicykel, chôdzu) pre každodenné cesty, ak by sa podmienky zlepšili?</span>
+                                    <div className="flex flex-wrap gap-4">
+                                        {['Určite by som zmenil/a', 'Pravdepodobne by som zmenil/a', 'Možno by som zmenil/a', 'Pravdepodobne by som nezmenil/a', 'Určite by som nezmenil/a'].map(option => (
+                                            <div key={option} className="flex items-center">
+                                                <input
+                                                    type="radio"
+                                                    id={`willingness-${option}`}
+                                                    name="willingnessToChange"
+                                                    value={option}
+                                                    checked={general.willingnessToChange === option}
+                                                    onChange={handleGeneralChange}
+                                                    className="hidden"
+                                                    required
+                                                />
+                                                <label htmlFor={`willingness-${option}`} className="flex items-center cursor-pointer text-gray-700">
+                                                    <span className="w-4 h-4 inline-block mr-2 rounded-full border border-gray-400"></span>
+                                                    {option}
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Part C: Trip Details */}
+                        <section className="border border-gray-200 p-4 sm:p-6 rounded-md shadow-sm">
+                            <h2 className="text-2xl font-semibold text-gray-700 mb-4">ČASŤ C: Podrobný prehľad ciest za posledných 24 hodín (Pre každého člena domácnosti osobitne)</h2>
+                            <p className="text-gray-600 mb-2">Prosím, vyplňte pre každého člena domácnosti (vrátane Vás), ktorý včera (**deň pred vypĺňaním prieskumu**) vykonal akúkoľvek cestu/presun po Bratislave a jej okolí (aj cezhranične), nasledujúcu tabuľku.</p>
+                            <p className="text-gray-600 mb-2">Za cestu sa považuje úsek prejdený len jedným dopravným prostriedkom, resp. pešo.</p>
+                            <p className="text-gray-600 mb-4">Ak člen domácnosti nevykonal žiadnu cestu, uveďte "žiadne cesty".</p>
+
+                            {members.map((member, memberIndex) => (
+                                <div key={member.id} className="border border-blue-200 p-4 rounded-md mb-6 bg-blue-50 relative">
+                                    <h3 className="text-xl font-medium text-blue-800 mb-3">Člen domácnosti č. {memberIndex + 1}</h3>
+                                    {members.length > 1 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => removeMember(member.id)}
+                                            className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 text-sm"
+                                            aria-label="Odstrániť člena domácnosti"
+                                        >
+                                            &times;
+                                        </button>
+                                    )}
+                                    <div className="mb-4">
+                                        <label htmlFor={`member-${member.id}-age`} className="block text-gray-700 font-medium mb-1">Vek:</label>
+                                        <input
+                                            type="number"
+                                            id={`member-${member.id}-age`}
+                                            name="age"
+                                            value={member.age}
+                                            onChange={(e) => handleMemberAgeChange(member.id, e.target.value)}
+                                            min="0"
+                                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                            // Age required if trips exist
+                                            required={member.trips.some(t => t.purpose !== 'žiadne cesty')}
+                                        />
+                                    </div>
+
+                                    {member.trips.map((trip, tripIndex) => (
+                                        <div key={trip.id} className="border border-gray-300 p-3 rounded-md mb-3 bg-white relative">
+                                            <h4 className="text-lg font-normal text-gray-800 mb-2">Cesta {tripIndex + 1}</h4>
+                                            {member.trips.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeTrip(member.id, trip.id)}
+                                                    className="absolute top-2 right-2 p-1 bg-red-400 text-white rounded-full hover:bg-red-500 text-xs"
+                                                    aria-label="Odstrániť cestu"
+                                                >
+                                                    &times;
+                                                </button>
+                                            )}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label htmlFor={`trip-${member.id}-${trip.id}-purpose`} className="block text-gray-700 text-sm font-medium mb-1">Účel cesty:</label>
+                                                    <input
+                                                        type="text"
+                                                        id={`trip-${member.id}-${trip.id}-purpose`}
+                                                        name="purpose"
+                                                        value={trip.purpose}
+                                                        onChange={(e) => handleTripChange(member.id, trip.id, e)}
+                                                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                                        placeholder="napr. práca, škola, nákup, voľný čas, iné"
+                                                        required
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label htmlFor={`trip-${member.id}-${trip.id}-start`} className="block text-gray-700 text-sm font-medium mb-1">Miesto začiatku:</label>
+                                                    <input
+                                                        type="text"
+                                                        id={`trip-${member.id}-${trip.id}-start`}
+                                                        name="start"
+                                                        value={trip.start}
+                                                        onChange={(e) => handleTripChange(member.id, trip.id, e)}
+                                                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                                        placeholder="napr. ulica a číslo domu, alebo najbližšia zastávka MHD"
+                                                        required
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label htmlFor={`trip-${member.id}-${trip.id}-end`} className="block text-gray-700 text-sm font-medium mb-1">Miesto ukončenia:</label>
+                                                    <input
+                                                        type="text"
+                                                        id={`trip-${member.id}-${trip.id}-end`}
+                                                        name="end"
+                                                        value={trip.end}
+                                                        onChange={(e) => handleTripChange(member.id, trip.id, e)}
+                                                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                                        required
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label htmlFor={`trip-${member.id}-${trip.id}-time`} className="block text-gray-700 text-sm font-medium mb-1">Čas začiatku:</label>
+                                                    <input
+                                                        type="time"
+                                                        id={`trip-${member.id}-${trip.id}-time`}
+                                                        name="time"
+                                                        value={trip.time}
+                                                        onChange={(e) => handleTripChange(member.id, trip.id, e)}
+                                                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                                        required
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label htmlFor={`trip-${member.id}-${trip.id}-mode`} className="block text-gray-700 text-sm font-medium mb-1">Použitý spôsob prepravy:</label>
+                                                    <select
+                                                        id={`trip-${member.id}-${trip.id}-mode`}
+                                                        name="mode"
+                                                        value={trip.mode}
+                                                        onChange={(e) => handleTripChange(member.id, trip.id, e)}
+                                                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                                        required
+                                                    >
+                                                        <option value="">Vyberte...</option>
+                                                        <option value="OA">Osobný automobil (OA)</option>
+                                                        <option value="MHD">Verejná hromadná doprava (MHD)</option>
+                                                        <option value="Peši">Peši</option>
+                                                        <option value="Bicykel">Bicykel</option>
+                                                        <option value="Taxi">Taxi</option>
+                                                        <option value="Iné">Iné</option>
+                                                    </select>
+                                                </div>
+                                                {trip.mode === 'MHD' && (
+                                                    <div>
+                                                        <label htmlFor={`trip-${member.id}-${trip.id}-mhdLine`} className="block text-gray-700 text-sm font-medium mb-1">Ak MHD: Označenie spoja/linky (ak si pamätáte):</label>
+                                                        <input
+                                                            type="text"
+                                                            id={`trip-${member.id}-${trip.id}-mhdLine`}
+                                                            name="mhdLine"
+                                                            value={trip.mhdLine}
+                                                            onChange={(e) => handleTripChange(member.id, trip.id, e)}
+                                                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={() => addTrip(member.id)}
+                                        className="mt-3 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition duration-200"
+                                    >
+                                        Pridať ďalšiu cestu
+                                    </button>
+                                    {member.trips.length === 1 && member.trips[0].purpose === '' && (
+                                        <div className="mt-3">
+                                            <label htmlFor={`member-${member.id}-no-trips`} className="block text-gray-700 font-medium mb-1">
+                                                <input
+                                                    type="checkbox"
+                                                    id={`member-${member.id}-no-trips`}
+                                                    checked={member.trips[0].purpose === 'žiadne cesty'}
+                                                    onChange={(e) => handleTripChange(member.id, member.trips[0].id, { target: { name: 'purpose', value: e.target.checked ? 'žiadne cesty' : '' } })}
+                                                    className="mr-2"
+                                                />
+                                                Tento člen domácnosti nevykonal žiadnu cestu
+                                            </label>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                            <button
+                                type="button"
+                                onClick={addMember}
+                                className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-200"
+                            >
+                                Pridať ďalšieho člena domácnosti
+                            </button>
+                        </section>
+
+                        {/* Part D: Specific Mode Questions */}
+                        <section className="border border-gray-200 p-4 sm:p-6 rounded-md shadow-sm">
+                            <h2 className="text-2xl font-semibold text-gray-700 mb-4">ČASŤ D: Doplnkové otázky k špecifickým módom</h2>
+                            <p className="text-gray-600 mb-4">Vyplňte len tie časti a otázky, ktoré sú pre Vás relevantné a ktoré používate najčastejšie. Označte, ktoré módy dopravy využívate:</p>
+
+                            <div className="flex flex-wrap gap-4 mb-6">
+                                {Object.keys(selectedModesD).map(modeKey => (
+                                    <div key={modeKey} className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id={`select-mode-d-${modeKey}`}
+                                            name={modeKey}
+                                            checked={selectedModesD[modeKey]}
+                                            onChange={handleSelectedModesDChange}
+                                            className="hidden"
+                                        />
+                                        <label htmlFor={`select-mode-d-${modeKey}`} className="flex items-center cursor-pointer text-gray-700 capitalize">
+                                            <span className="w-4 h-4 inline-block mr-2 rounded-md border border-gray-400"></span>
+                                            {modeKey === 'iad' ? 'Individuálna automobilová doprava (IAD)' :
+                                             modeKey === 'mhd' ? 'Verejná hromadná doprava (MHD)' :
+                                             modeKey === 'bike' ? 'Cyklistická doprava' :
+                                             modeKey === 'walk' ? 'Pešia doprava' : modeKey}
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {selectedModesD.iad && (
+                                <div className="border border-gray-300 p-4 rounded-md mb-4 bg-gray-50">
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-3">D1. Individuálna automobilová doprava (IAD)</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label htmlFor="iad-reasonForCar" className="block text-gray-700 font-medium mb-1">1. Aký je Váš hlavný dôvod, prečo uprednostňujete používanie osobného automobilu pred inými spôsobmi dopravy? (Napr. flexibilita, rýchlosť, pohodlie, nedostatok alternatív)</label>
+                                            <input
+                                                type="text"
+                                                id="iad-reasonForCar"
+                                                name="reasonForCar"
+                                                value={specificModes.iad.reasonForCar}
+                                                onChange={(e) => handleSpecificModesChange('iad', e)}
+                                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label htmlFor="iad-dailyCarUseFreq" className="block text-gray-700 font-medium mb-1">2. Ako často využívate súkromné alebo služobné vozidlo na denné jazdy okrem ciest do/zo zamestnania a školy? (Napr. 0-1 krát, 2-3 krát, viac ako 3 krát)</label>
+                                            <input
+                                                type="text"
+                                                id="iad-dailyCarUseFreq"
+                                                name="dailyCarUseFreq"
+                                                value={specificModes.iad.dailyCarUseFreq}
+                                                onChange={(e) => handleSpecificModesChange('iad', e)}
+                                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label htmlFor="iad-motivationToReduceCar" className="block text-gray-700 font-medium mb-1">3. Čo by Vás najviac motivovalo (alebo čo Vám chýba), aby ste obmedzili používanie osobného automobilu v Bratislave?</label>
+                                            <input
+                                                type="text"
+                                                id="iad-motivationToReduceCar"
+                                                name="motivationToReduceCar"
+                                                value={specificModes.iad.motivationToReduceCar}
+                                                onChange={(e) => handleSpecificModesChange('iad', e)}
+                                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedModesD.mhd && (
+                                <div className="border border-gray-300 p-4 rounded-md mb-4 bg-gray-50">
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-3">D2. Verejná hromadná doprava (MHD)</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label htmlFor="mhd-mhdUseFreq" className="block text-gray-700 font-medium mb-1">1. Ako často využívate MHD (autobus, trolejbus, električka) pre pravidelné/nepravidelné cesty? (Napr. denne, niekoľkokrát týždenne, zriedka, nikdy)</label>
+                                            <input
+                                                type="text"
+                                                id="mhd-mhdUseFreq"
+                                                name="mhdUseFreq"
+                                                value={specificModes.mhd.mhdUseFreq}
+                                                onChange={(e) => handleSpecificModesChange('mhd', e)}
+                                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <span className="block text-gray-700 font-medium mb-1">2. Aká je Vaša celková spokojnosť s frekvenciou a spoľahlivosťou MHD liniek, ktoré využívate?</span>
+                                            <div className="flex flex-wrap gap-4">
+                                                {['Veľmi nespokojný', 'Nespokojný', 'Ani spokojný, ani nespokojný', 'Spokojný', 'Veľmi spokojný'].map(option => (
+                                                    <div key={option} className="flex items-center">
+                                                        <input
+                                                            type="radio"
+                                                            id={`mhd-satisfaction-${option}`}
+                                                            name="mhdSatisfaction"
+                                                            value={option}
+                                                            checked={specificModes.mhd.mhdSatisfaction === option}
+                                                            onChange={(e) => handleSpecificModesChange('mhd', e)}
+                                                            className="hidden"
+                                                        />
+                                                        <label htmlFor={`mhd-satisfaction-${option}`} className="flex items-center cursor-pointer text-gray-700">
+                                                            <span className="w-4 h-4 inline-block mr-2 rounded-full border border-gray-400"></span>
+                                                            {option}
+                                                        </label>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label htmlFor="mhd-motivationToUseMHD" className="block text-gray-700 font-medium mb-1">3. Čo by Vás najviac motivovalo k častejšiemu využívaniu MHD? (Napr. lepšia spoľahlivosť, kratšie časy cesty, lepšia dostupnosť zastávok, nižšie cestovné, pohodlie)</label>
+                                            <input
+                                                type="text"
+                                                id="mhd-motivationToUseMHD"
+                                                name="motivationToUseMHD"
+                                                value={specificModes.mhd.motivationToUseMHD}
+                                                onChange={(e) => handleSpecificModesChange('mhd', e)}
+                                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedModesD.bike && (
+                                <div className="border border-gray-300 p-4 rounded-md mb-4 bg-gray-50">
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-3">D3. Cyklistická doprava</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label htmlFor="bike-ownershipFreq" className="block text-gray-700 font-medium mb-1">1. Ak vlastníte bicykel, ako často ho využívate na prepravu (nie rekreačne)? (Napr. denne, niekoľkokrát týždenne, zriedka, nikdy)</label>
+                                            <input
+                                                type="text"
+                                                id="bike-ownershipFreq"
+                                                name="bikeOwnershipFreq"
+                                                value={specificModes.bike.bikeOwnershipFreq}
+                                                onChange={(e) => handleSpecificModesChange('bike', e)}
+                                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <span className="block text-gray-700 font-medium mb-1">2. Aká je Vaša spokojnosť s cyklistickou infraštruktúrou v Bratislave (napr. cyklotrasy, stojany, bezpečnosť)?</span>
+                                            <div className="flex flex-wrap gap-4">
+                                                {['Veľmi nespokojný', 'Nespokojný', 'Ani spokojný, ani nespokojný', 'Spokojný', 'Veľmi spokojný'].map(option => (
+                                                    <div key={option} className="flex items-center">
+                                                        <input
+                                                            type="radio"
+                                                            id={`bike-satisfaction-${option}`}
+                                                            name="bikeInfraSatisfaction"
+                                                            value={option}
+                                                            checked={specificModes.bike.bikeInfraSatisfaction === option}
+                                                            onChange={(e) => handleSpecificModesChange('bike', e)}
+                                                            className="hidden"
+                                                        />
+                                                        <label htmlFor={`bike-satisfaction-${option}`} className="flex items-center cursor-pointer text-gray-700">
+                                                            <span className="w-4 h-4 inline-block mr-2 rounded-full border border-gray-400"></span>
+                                                            {option}
+                                                        </label>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label htmlFor="bike-motivationToIncreaseBike" className="block text-gray-700 font-medium mb-1">3. Čo by podľa Vás najviac prispelo k zvýšeniu atraktivity cyklistickej dopravy v meste? (Napr. viac cyklotrás, bezpečné parkovanie, sprchy na pracovisku)</label>
+                                            <input
+                                                type="text"
+                                                id="bike-motivationToIncreaseBike"
+                                                name="motivationToIncreaseBike"
+                                                value={specificModes.bike.motivationToIncreaseBike}
+                                                onChange={(e) => handleSpecificModesChange('bike', e)}
+                                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedModesD.walk && (
+                                <div className="border border-gray-300 p-4 rounded-md mb-4 bg-gray-50">
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-3">D4. Pešia doprava</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label htmlFor="walk-freq" className="block text-gray-700 font-medium mb-1">1. Ako často sa premiestňujete pešo na vzdialenosti nad 1 km (napr. do práce, obchodu, školy)? (Napr. denne, niekoľkokrát týždenne, zriedka, nikdy)</label>
+                                            <input
+                                                type="text"
+                                                id="walk-freq"
+                                                name="walkFreq"
+                                                value={specificModes.walk.walkFreq}
+                                                onChange={(e) => handleSpecificModesChange('walk', e)}
+                                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <span className="block text-gray-700 font-medium mb-1">2. Aká je Vaša spokojnosť s podmienkami pre pešiu dopravu v Bratislave (napr. kvalita chodníkov, osvetlenie, prepojenosť trás)?</span>
+                                            <div className="flex flex-wrap gap-4">
+                                                {['Veľmi nespokojný', 'Nespokojný', 'Ani spokojný, ani nespokojný', 'Spokojný', 'Veľmi spokojný'].map(option => (
+                                                    <div key={option} className="flex items-center">
+                                                        <input
+                                                            type="radio"
+                                                            id={`walk-satisfaction-${option}`}
+                                                            name="walkInfraSatisfaction"
+                                                            value={option}
+                                                            checked={specificModes.walk.walkInfraSatisfaction === option}
+                                                            onChange={(e) => handleSpecificModesChange('walk', e)}
+                                                            className="hidden"
+                                                        />
+                                                        <label htmlFor={`walk-satisfaction-${option}`} className="flex items-center cursor-pointer text-gray-700">
+                                                            <span className="w-4 h-4 inline-block mr-2 rounded-full border border-gray-400"></span>
+                                                            {option}
+                                                        </label>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label htmlFor="walk-obstacles" className="block text-gray-700 font-medium mb-1">3. Aké sú najväčšie prekážky, ktoré Vám bránia v častejšom využívaní pešej dopravy na dlhšie vzdialenosti?</label>
+                                            <input
+                                                type="text"
+                                                id="walk-obstacles"
+                                                name="walkObstacles"
+                                                value={specificModes.walk.walkObstacles}
+                                                onChange={(e) => handleSpecificModesChange('walk', e)}
+                                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </section>
+
+                        <div className="text-center">
+                            <button
+                                type="submit"
+                                className="px-8 py-4 bg-blue-700 text-white font-semibold rounded-md shadow-md hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-300"
+                            >
+                                Odoslať dotazník
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            );
+        };
+
+        // Render the App component into the 'root' div
+        // Use createRoot for React 18 compatibility
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
